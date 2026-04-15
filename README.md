@@ -45,11 +45,52 @@ proxsnap nas vm create --vm 100 --suspend
 proxsnap nas storage create --storage NAS01 --fsfreeze
 proxsnap nas storage list
 proxsnap nas storage list --storage NAS01
+proxsnap nas storage list --output json
 proxsnap nas storage mount --storage NAS01 --snapshot proxmox_snapshot_2026-04-14_02:00:00+0200
 
 proxsnap san storage create --storage SAN01 --fsfreeze
+proxsnap san storage list
+proxsnap san storage list --storage SAN01
+proxsnap san storage list --output json
 proxsnap san storage restore --storage SAN01 --snapshot proxmox_snapshot_2026-04-14_02:15:00+0200
 proxsnap san storage show --storage SAN01
+proxsnap san storage show --storage SAN01 --output json
+```
+
+### Output
+
+Human-readable table output is the default:
+
+```bash
+proxsnap nas storage list
+proxsnap san storage list
+```
+
+Use `--output json` when piping to scripts or other tools:
+
+```bash
+proxsnap nas storage list --output json
+proxsnap san storage show --storage SAN01 --output json
+```
+
+`nas storage list` and `san storage list` list all configured storage entries for their backend when `--storage` is omitted. Add `--storage <id>` to limit the output to one configured storage.
+
+### Logging
+
+The default log level is `info`, so snapshot creation prints progress as it runs. Progress logs use a shared format:
+
+```text
+[INFO] [san snapshot:SAN01] start: starting SAN storage snapshot
+[INFO] [san snapshot:SAN01] step: discovering VMs that use storage `SAN01` before fsfreeze
+[INFO] [san snapshot:SAN01] step: creating ONTAP snapshot `proxmox_snapshot_...` on volume `san_vol1`
+[INFO] [san snapshot:SAN01] done: snapshot `proxmox_snapshot_...` created
+```
+
+Use `--log-level warn` for quieter output or `--log-level debug` to include HTTP response debug logs:
+
+```bash
+proxsnap --log-level warn nas storage create --storage NAS01
+proxsnap --log-level debug san storage create --storage SAN01 --fsfreeze
 ```
 
 ## Config
@@ -99,6 +140,7 @@ ssh_user = "root"
 - NAS VM snapshots use ONTAP file cloning for eligible VM disks.
 - NAS storage `create --fsfreeze` creates temporary Proxmox VM snapshots before taking the ONTAP snapshot, then removes them.
 - SAN storage `create --fsfreeze` uses the QEMU guest agent directly with `fsfreeze-freeze` / `fsfreeze-thaw`.
+- Snapshot creation logs each major phase: config/backend checks, VM discovery, freeze/snapshot/thaw or temporary snapshot cleanup, and final success/failure.
 - NAS `mount` creates a FlexClone volume and registers `<storage>-CLONE` in Proxmox.
 - VM disk snapshots still keep the same known limitation as the Python version: Proxmox does not automatically rescan and display them as attached snapshots.
 
@@ -118,6 +160,8 @@ src/
 
 Rough responsibilities:
 - `clients/` contains the API traits plus the reqwest-backed HTTP implementations
+- `display.rs` contains shared table and JSON output rendering
+- `logger.rs` contains shared CLI logging and progress messages
 - `workflows/` contains the NAS and SAN behavior layers
 - `config.rs`, `models.rs`, `util.rs`, and `error.rs` contain shared support code
 

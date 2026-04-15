@@ -3,6 +3,7 @@ pub mod clients;
 pub mod config;
 pub mod display;
 pub mod error;
+pub mod logger;
 pub mod models;
 pub mod shell;
 pub mod util;

@@ -1,8 +1,8 @@
-use log::warn;
 use tokio::time::{Duration, sleep};
 
 use crate::clients::proxmox::ProxmoxApi;
 use crate::error::{AppError, Result};
+use crate::logger::ProgressLogger;
 use crate::models::VmRef;
 use crate::util::vm_uses_storage_scsi_only;
 
@@ -25,12 +25,13 @@ where
     P: ProxmoxApi,
 {
     let mut result = Vec::new();
+    let progress = ProgressLogger::new("proxmox", "discover-vms", storage_id);
 
     for node in proxmox.list_nodes().await? {
         let vms = match proxmox.list_vms(&node.node).await {
             Ok(vms) => vms,
             Err(error) => {
-                warn!("failed to list VMs on {}: {}", node.node, error);
+                progress.warn(format!("failed to list VMs on {}: {}", node.node, error));
                 continue;
             }
         };
@@ -39,10 +40,10 @@ where
             let config = match proxmox.get_vm_config(&node.node, vm.vmid).await {
                 Ok(config) => config,
                 Err(error) => {
-                    warn!(
+                    progress.warn(format!(
                         "failed to fetch config for vm {} on {}: {}",
                         vm.vmid, node.node, error
-                    );
+                    ));
                     continue;
                 }
             };

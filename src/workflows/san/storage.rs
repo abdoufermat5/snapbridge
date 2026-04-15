@@ -1,4 +1,3 @@
-use log::{info, warn};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -7,6 +6,7 @@ use crate::clients::proxmox::ProxmoxApi;
 use crate::config::{LoadedConfig, SanStorageConfig, StorageBackend, StorageConfig};
 use crate::display::{DetailSection, OutputFormat, SnapshotRow};
 use crate::error::{AppError, Result};
+use crate::logger::ProgressLogger;
 use crate::shell::ShellRunner;
 use crate::util::ontap_snapshot_name;
 
@@ -23,52 +23,102 @@ where
     P: ProxmoxApi,
     O: OntapApi,
 {
+    let progress = ProgressLogger::new("san", "snapshot", storage_id);
+    progress.start("starting SAN storage snapshot");
+    progress.step("checking storage backend and loading SAN config");
     let san_config = require_san_config(config, storage_id)?;
+
+    progress.step(format!("loading ONTAP volume `{}`", san_config.volume_name));
     let volume = ontap.get_volume_by_name(&san_config.volume_name).await?;
 
     let mut frozen_vms = Vec::new();
     if fsfreeze {
-        for vm in get_vms_by_storage(proxmox, storage_id).await? {
+        progress.step(format!(
+            "discovering VMs that use storage `{storage_id}` before fsfreeze"
+        ));
+        let vms = get_vms_by_storage(proxmox, storage_id).await?;
+        progress.step(format!("found {} VM(s) using storage", vms.len()));
+
+        for vm in vms {
             if vm.status != "running" {
-                info!(
-                    "skipping fsfreeze for vm {} ({}): not running",
-                    vm.vmid, vm.name
-                );
+                progress.skip(format!(
+                    "VM {} ({}) is {}; fsfreeze only applies to running VMs",
+                    vm.vmid, vm.name, vm.status
+                ));
                 continue;
             }
 
+            progress.step(format!(
+                "freezing filesystem for VM {} ({}) with guest agent",
+                vm.vmid, vm.name
+            ));
             match proxmox
                 .run_guest_agent_command(&vm.node, vm.vmid, "fsfreeze-freeze")
                 .await
             {
-                Ok(_) => frozen_vms.push(vm),
-                Err(error) => warn!(
+                Ok(_) => {
+                    progress.step(format!("VM {} ({}) frozen", vm.vmid, vm.name));
+                    frozen_vms.push(vm);
+                }
+                Err(error) => progress.warn(format!(
                     "fsfreeze failed for vm {} ({}): {}",
                     vm.vmid, vm.name, error
-                ),
+                )),
             }
         }
+    } else {
+        progress.step("fsfreeze disabled; skipping guest filesystem freeze");
     }
 
     let snapshot_name = ontap_snapshot_name(&config.proxmox.timezone)?;
     let snapshot_comment = format!("Snapshot of Proxmox SAN storage {storage_id}");
+    progress.step(format!(
+        "creating ONTAP snapshot `{snapshot_name}` on volume `{}`",
+        volume.name
+    ));
     let result = ontap
         .create_snapshot(&volume, &snapshot_name, &snapshot_comment)
         .await;
 
+    match &result {
+        Ok(()) => progress.step("ONTAP snapshot create request completed"),
+        Err(error) => progress.warn(format!(
+            "ONTAP snapshot create failed; thawing frozen VMs before returning: {error}"
+        )),
+    }
+
+    if frozen_vms.is_empty() {
+        progress.step("no frozen VMs to thaw");
+    } else {
+        progress.step(format!("thawing {} frozen VM(s)", frozen_vms.len()));
+    }
+
     for vm in frozen_vms {
+        progress.step(format!(
+            "thawing filesystem for VM {} ({}) with guest agent",
+            vm.vmid, vm.name
+        ));
         if let Err(error) = proxmox
             .run_guest_agent_command(&vm.node, vm.vmid, "fsfreeze-thaw")
             .await
         {
-            warn!(
+            progress.warn(format!(
                 "fsfreeze-thaw failed for vm {} ({}): {}",
                 vm.vmid, vm.name, error
-            );
+            ));
         }
     }
 
-    result
+    match result {
+        Ok(()) => {
+            progress.success(format!("snapshot `{snapshot_name}` created"));
+            Ok(())
+        }
+        Err(error) => {
+            progress.failed(format!("snapshot `{snapshot_name}` failed: {error}"));
+            Err(error)
+        }
+    }
 }
 
 pub async fn restore_storage_snapshot<P, O, S>(

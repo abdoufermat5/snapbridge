@@ -1,10 +1,9 @@
-use log::{info, warn};
-
 use crate::clients::ontap::OntapApi;
 use crate::clients::proxmox::ProxmoxApi;
 use crate::config::{LoadedConfig, StorageBackend};
 use crate::display::{OutputFormat, SnapshotRow};
 use crate::error::{AppError, Result};
+use crate::logger::ProgressLogger;
 use crate::models::{FlexCloneRequest, ProxmoxStorage, VmRef};
 use crate::util::{ontap_snapshot_name, pve_snapshot_name};
 
@@ -21,63 +20,119 @@ where
     P: ProxmoxApi,
     O: OntapApi,
 {
+    let progress = ProgressLogger::new("nas", "snapshot", storage_id);
+    progress.start("starting NAS storage snapshot");
+    progress.step("checking storage backend");
     config.require_backend(storage_id, StorageBackend::Nas)?;
+
+    progress.step("resolving Proxmox storage export to ONTAP volume");
     let volume_name = resolve_nas_volume_name(proxmox, storage_id).await?;
+    progress.step(format!("loading ONTAP volume `{volume_name}`"));
     let volume = ontap.get_volume_by_name(&volume_name).await?;
 
     let mut pve_snapshots: Vec<(VmRef, String)> = Vec::new();
     if fsfreeze {
         let snapname = pve_snapshot_name(&config.proxmox.timezone)?;
-        for vm in get_vms_by_storage(proxmox, storage_id).await? {
+        progress.step(format!(
+            "discovering VMs that use storage `{storage_id}` before fsfreeze"
+        ));
+        let vms = get_vms_by_storage(proxmox, storage_id).await?;
+        progress.step(format!("found {} VM(s) using storage", vms.len()));
+
+        for vm in vms {
             if vm.status != "running" {
-                info!(
-                    "skipping fsfreeze for vm {} ({}): not running",
-                    vm.vmid, vm.name
-                );
+                progress.skip(format!(
+                    "VM {} ({}) is {}; fsfreeze only applies to running VMs",
+                    vm.vmid, vm.name, vm.status
+                ));
                 continue;
             }
+
+            progress.step(format!(
+                "creating temporary Proxmox snapshot `{snapname}` for VM {} ({})",
+                vm.vmid, vm.name
+            ));
             let task = proxmox
                 .create_vm_snapshot(&vm.node, vm.vmid, &snapname, "proxsnap fsfreeze")
                 .await?;
             let exitstatus = wait_for_task(proxmox, &vm.node, &task).await?;
             if exitstatus != "OK" {
-                warn!(
+                progress.warn(format!(
                     "fsfreeze snapshot for vm {} ({}) failed: {}",
                     vm.vmid, vm.name, exitstatus
-                );
+                ));
             } else {
+                progress.step(format!(
+                    "temporary Proxmox snapshot `{snapname}` ready for VM {} ({})",
+                    vm.vmid, vm.name
+                ));
                 pve_snapshots.push((vm, snapname.clone()));
             }
         }
+    } else {
+        progress.step("fsfreeze disabled; skipping temporary Proxmox snapshots");
     }
 
     let snapshot_name = ontap_snapshot_name(&config.proxmox.timezone)?;
     let snapshot_comment = format!("Snapshot of Proxmox NAS storage {storage_id}");
+    progress.step(format!(
+        "creating ONTAP snapshot `{snapshot_name}` on volume `{}`",
+        volume.name
+    ));
     let create_result = ontap
         .create_snapshot(&volume, &snapshot_name, &snapshot_comment)
         .await;
 
+    match &create_result {
+        Ok(()) => progress.step("ONTAP snapshot create request completed"),
+        Err(error) => progress.warn(format!(
+            "ONTAP snapshot create failed; cleaning up temporary snapshots before returning: {error}"
+        )),
+    }
+
+    if pve_snapshots.is_empty() {
+        progress.step("no temporary Proxmox snapshots to clean up");
+    } else {
+        progress.step(format!(
+            "cleaning up {} temporary Proxmox snapshot(s)",
+            pve_snapshots.len()
+        ));
+    }
+
     for (vm, snapname) in pve_snapshots {
+        progress.step(format!(
+            "deleting temporary Proxmox snapshot `{snapname}` for VM {} ({})",
+            vm.vmid, vm.name
+        ));
         match proxmox
             .delete_vm_snapshot(&vm.node, vm.vmid, &snapname)
             .await
         {
             Ok(task) => {
                 if let Err(error) = wait_for_task(proxmox, &vm.node, &task).await {
-                    warn!(
+                    progress.warn(format!(
                         "failed to delete fsfreeze snapshot {} for vm {} ({}): {}",
                         snapname, vm.vmid, vm.name, error
-                    );
+                    ));
                 }
             }
-            Err(error) => warn!(
+            Err(error) => progress.warn(format!(
                 "failed to delete fsfreeze snapshot {} for vm {} ({}): {}",
                 snapname, vm.vmid, vm.name, error
-            ),
+            )),
         }
     }
 
-    create_result
+    match create_result {
+        Ok(()) => {
+            progress.success(format!("snapshot `{snapshot_name}` created"));
+            Ok(())
+        }
+        Err(error) => {
+            progress.failed(format!("snapshot `{snapshot_name}` failed: {error}"));
+            Err(error)
+        }
+    }
 }
 
 pub async fn restore_storage_snapshot<P, O>(

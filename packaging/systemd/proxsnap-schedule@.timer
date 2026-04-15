@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily proxsnap schedule %i
+Documentation=file:/usr/share/doc/proxsnap/README.md
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+Unit=proxsnap-schedule@%i.service
+
+[Install]
+WantedBy=timers.target

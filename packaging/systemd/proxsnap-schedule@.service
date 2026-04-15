@@ -1,0 +1,9 @@
+[Unit]
+Description=Run proxsnap schedule %i
+Documentation=file:/usr/share/doc/proxsnap/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/proxsnap --config /etc/proxsnap/proxsnap.toml schedule run %i

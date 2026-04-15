@@ -1,6 +1,6 @@
 [package]
 name = "proxsnap"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Proxmox and NetApp ONTAP snapshot workflows for NAS and SAN storage"
 readme = "README.md"
@@ -14,6 +14,8 @@ extended-description = "proxsnap is an operator CLI for creating, listing, resto
 assets = [
     ["target/release/proxsnap", "usr/bin/", "755"],
     ["proxsnap.example.toml", "etc/proxsnap/proxsnap.toml", "600"],
+    ["packaging/systemd/proxsnap-schedule@.service", "lib/systemd/system/proxsnap-schedule@.service", "644"],
+    ["packaging/systemd/proxsnap-schedule@.timer", "lib/systemd/system/proxsnap-schedule@.timer", "644"],
     ["README.md", "usr/share/doc/proxsnap/README.md", "644"],
     ["proxsnap.example.toml", "usr/share/doc/proxsnap/examples/proxsnap.toml", "644"],
 ]

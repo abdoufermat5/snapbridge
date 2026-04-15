@@ -22,3 +22,9 @@ verify_ssl = false
 volume_name = "san_vol1"
 lun_path = "/vol/san_vol1/lun0"
 ssh_user = "root"
+
+[schedule.daily]
+storages = ["NAS01", "SAN01"]
+fsfreeze = true
+keep_last = 7
+max_age = "30d"

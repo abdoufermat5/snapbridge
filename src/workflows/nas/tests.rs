@@ -252,6 +252,7 @@ fn sample_config() -> LoadedConfig {
         )]
         .into_iter()
         .collect(),
+        schedule: BTreeMap::new(),
     }
 }
 

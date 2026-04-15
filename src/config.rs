@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -10,6 +11,8 @@ use crate::error::{AppError, Result};
 pub struct LoadedConfig {
     pub proxmox: ProxmoxConfig,
     pub storage: BTreeMap<String, StorageConfig>,
+    #[serde(default)]
+    pub schedule: BTreeMap<String, ScheduleConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,6 +79,23 @@ pub struct SanStorageConfig {
     pub ssh_user: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScheduleConfig {
+    pub storages: Vec<String>,
+    #[serde(default)]
+    pub fsfreeze: bool,
+    #[serde(default)]
+    pub keep_last: Option<usize>,
+    #[serde(default)]
+    pub max_age: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetentionPolicy {
+    pub keep_last: Option<usize>,
+    pub max_age: Option<Duration>,
+}
+
 impl LoadedConfig {
     pub fn from_path(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)?;
@@ -89,6 +109,7 @@ impl LoadedConfig {
             ConfigDocument::Legacy(config) => Self {
                 proxmox: config.proxmox,
                 storage: config.storage,
+                schedule: BTreeMap::new(),
             },
         })
     }
@@ -128,6 +149,25 @@ impl LoadedConfig {
                 (actual == expected).then_some(id.as_str())
             })
             .collect()
+    }
+
+    pub fn schedule(&self, name: &str) -> Result<&ScheduleConfig> {
+        self.schedule
+            .get(name)
+            .ok_or_else(|| AppError::Config(format!("schedule `{name}` is not configured")))
+    }
+}
+
+impl ScheduleConfig {
+    pub fn retention_policy(&self) -> Result<Option<RetentionPolicy>> {
+        let max_age = self.max_age.as_deref().map(parse_duration).transpose()?;
+
+        Ok(
+            (self.keep_last.is_some() || max_age.is_some()).then_some(RetentionPolicy {
+                keep_last: self.keep_last,
+                max_age,
+            }),
+        )
     }
 }
 
@@ -170,8 +210,45 @@ fn default_ssh_user() -> String {
     "root".to_owned()
 }
 
+fn parse_duration(value: &str) -> Result<Duration> {
+    let value = value.trim();
+    if value.len() < 2 {
+        return Err(AppError::Config(format!("invalid duration `{value}`")));
+    }
+
+    let (number, unit) = value.split_at(value.len() - 1);
+    let amount = number
+        .parse::<u64>()
+        .map_err(|_| AppError::Config(format!("invalid duration `{value}`")))?;
+
+    let seconds = match unit {
+        "s" => amount,
+        "m" => amount
+            .checked_mul(60)
+            .ok_or_else(|| AppError::Config(format!("duration `{value}` is too large")))?,
+        "h" => amount
+            .checked_mul(60 * 60)
+            .ok_or_else(|| AppError::Config(format!("duration `{value}` is too large")))?,
+        "d" => amount
+            .checked_mul(24 * 60 * 60)
+            .ok_or_else(|| AppError::Config(format!("duration `{value}` is too large")))?,
+        "w" => amount
+            .checked_mul(7 * 24 * 60 * 60)
+            .ok_or_else(|| AppError::Config(format!("duration `{value}` is too large")))?,
+        _ => {
+            return Err(AppError::Config(format!(
+                "invalid duration `{value}`; expected suffix s, m, h, d, or w"
+            )));
+        }
+    };
+
+    Ok(Duration::from_secs(seconds))
+}
+
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::{LoadedConfig, StorageBackend};
 
     #[test]
@@ -201,6 +278,12 @@ mod tests {
             volume_name = "san_vol1"
             lun_path = "/vol/san_vol1/lun0"
             ssh_user = "root"
+
+            [schedule.daily]
+            storages = ["NAS01", "SAN01"]
+            fsfreeze = true
+            keep_last = 7
+            max_age = "30d"
             "#,
         )
         .expect("config should parse");
@@ -220,6 +303,19 @@ mod tests {
         assert_eq!(
             config.storage_ids_for_backend(StorageBackend::San),
             vec!["SAN01"]
+        );
+
+        let schedule = config.schedule("daily").expect("schedule should exist");
+        assert_eq!(schedule.storages, vec!["NAS01", "SAN01"]);
+        assert!(schedule.fsfreeze);
+        assert_eq!(schedule.keep_last, Some(7));
+        assert_eq!(
+            schedule
+                .retention_policy()
+                .expect("retention should parse")
+                .expect("retention should exist")
+                .max_age,
+            Some(Duration::from_secs(30 * 24 * 60 * 60))
         );
     }
 
@@ -262,6 +358,38 @@ mod tests {
         assert_eq!(
             config.storage_ids_for_backend(StorageBackend::San),
             vec!["SAN01"]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_schedule_duration() {
+        let config = LoadedConfig::parse(
+            r#"
+            [proxmox]
+            host = "pve.local"
+            user = "root@pam"
+            token_name = "snap"
+            token_value = "secret"
+
+            [storage.NAS01]
+            backend = "nas"
+            ontap_host = "ontap.local"
+            ontap_user = "admin"
+            ontap_password = "pw"
+
+            [schedule.daily]
+            storages = ["NAS01"]
+            max_age = "one month"
+            "#,
+        )
+        .expect("config should parse");
+
+        assert!(
+            config
+                .schedule("daily")
+                .unwrap()
+                .retention_policy()
+                .is_err()
         );
     }
 }

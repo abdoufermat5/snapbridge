@@ -9,7 +9,9 @@ pub mod shell;
 pub mod util;
 pub mod workflows;
 
-use crate::cli::{Cli, NasCommand, NasStorageCommand, SanCommand, SanStorageCommand, VmCommand};
+use crate::cli::{
+    Cli, NasCommand, NasStorageCommand, SanCommand, SanStorageCommand, ScheduleCommand, VmCommand,
+};
 use crate::clients::ontap::ReqwestOntapClient;
 use crate::clients::proxmox::ReqwestProxmoxClient;
 use crate::config::{LoadedConfig, StorageBackend, StorageConfig};
@@ -18,6 +20,7 @@ use crate::error::Result;
 use crate::shell::TokioShellRunner;
 use crate::workflows::nas;
 use crate::workflows::san;
+use crate::workflows::scheduler::{self, ScheduleAction};
 
 pub async fn run(cli: Cli) -> Result<()> {
     let output = cli.output;
@@ -190,6 +193,39 @@ pub async fn run(cli: Cli) -> Result<()> {
                     .await
                 }
             },
+        },
+        crate::cli::TopCommand::Schedule(command) => match command {
+            ScheduleCommand::Run(args) => {
+                scheduler::execute_schedule(
+                    &config,
+                    &proxmox,
+                    &args.name,
+                    ScheduleAction::Run,
+                    |storage_id| ontap_for_storage(&config, storage_id),
+                )
+                .await
+            }
+            ScheduleCommand::Create(args) => {
+                scheduler::execute_schedule(
+                    &config,
+                    &proxmox,
+                    &args.name,
+                    ScheduleAction::Create,
+                    |storage_id| ontap_for_storage(&config, storage_id),
+                )
+                .await
+            }
+            ScheduleCommand::Delete(args) => {
+                scheduler::execute_schedule(
+                    &config,
+                    &proxmox,
+                    &args.name,
+                    ScheduleAction::Delete,
+                    |storage_id| ontap_for_storage(&config, storage_id),
+                )
+                .await
+            }
+            ScheduleCommand::List => scheduler::print_schedules(output, &config),
         },
     }
 }

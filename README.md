@@ -80,6 +80,11 @@ proxsnap san storage list --output json
 proxsnap san storage restore --storage SAN01 --snapshot proxmox_snapshot_2026-04-14_02:15:00+0200
 proxsnap san storage show --storage SAN01
 proxsnap san storage show --storage SAN01 --output json
+
+proxsnap schedule list
+proxsnap schedule run daily
+proxsnap schedule create daily
+proxsnap schedule delete daily
 ```
 
 ### Output
@@ -158,6 +163,12 @@ verify_ssl = false
 volume_name = "san_vol1"
 lun_path = "/vol/san_vol1/lun0"
 ssh_user = "root"
+
+[schedule.daily]
+storages = ["NAS01", "SAN01"]
+fsfreeze = true
+keep_last = 7
+max_age = "30d"
 ```
 
 ### Config Notes
@@ -165,9 +176,54 @@ ssh_user = "root"
 - `proxmox.host` may be a hostname or full URL. If you pass a hostname, `https://<host>:8006` is assumed.
 - NAS entries do not need an ONTAP volume name in config. The volume is derived from the Proxmox storage export path.
 - SAN entries require `volume_name` and `lun_path`.
+- Schedule entries target explicit storage IDs. `fsfreeze` defaults to `false`.
+- Schedule retention supports `keep_last`, `max_age`, or both. `max_age` accepts `s`, `m`, `h`, `d`, and `w` suffixes, for example `30d`.
 - SAN restore uses SSH to each Proxmox node and runs:
   - `iscsiadm -m session --rescan`
   - `pvscan --cache`
+
+## Scheduling
+
+Schedules live in `/etc/proxsnap/proxsnap.toml` under `[schedule.<name>]`.
+
+Run a schedule manually:
+
+```bash
+proxsnap schedule run daily
+```
+
+Run only one phase:
+
+```bash
+proxsnap schedule create daily
+proxsnap schedule delete daily
+```
+
+The Debian package installs reusable systemd units:
+- `/lib/systemd/system/proxsnap-schedule@.service`
+- `/lib/systemd/system/proxsnap-schedule@.timer`
+
+Enable the packaged daily timer for a schedule named `daily`:
+
+```bash
+sudo systemctl enable --now proxsnap-schedule@daily.timer
+sudo systemctl status proxsnap-schedule@daily.timer
+journalctl -u proxsnap-schedule@daily.service
+```
+
+The timer runs at `02:00` by default. Override timing with a systemd drop-in for each schedule:
+
+```bash
+sudo systemctl edit proxsnap-schedule@daily.timer
+```
+
+Example override:
+
+```ini
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* 03:30:00
+```
 
 ## Behavior Notes
 
@@ -175,6 +231,7 @@ ssh_user = "root"
 - NAS storage `create --fsfreeze` creates temporary Proxmox VM snapshots before taking the ONTAP snapshot, then removes them.
 - SAN storage `create --fsfreeze` uses the QEMU guest agent directly with `fsfreeze-freeze` / `fsfreeze-thaw`.
 - Snapshot creation logs each major phase: config/backend checks, VM discovery, freeze/snapshot/thaw or temporary snapshot cleanup, and final success/failure.
+- Scheduled deletion only removes snapshots whose names start with `proxmox_snapshot_` and contain a parseable Proxsnap timestamp.
 - NAS `mount` creates a FlexClone volume and registers `<storage>-CLONE` in Proxmox.
 - VM disk snapshots still keep the same known limitation as the Python version: Proxmox does not automatically rescan and display them as attached snapshots.
 
@@ -206,6 +263,8 @@ Debian package metadata lives in `Cargo.toml` under `[package.metadata.deb]`.
 The generated package installs:
 - `/usr/bin/proxsnap`
 - `/etc/proxsnap/proxsnap.toml`
+- `/lib/systemd/system/proxsnap-schedule@.service`
+- `/lib/systemd/system/proxsnap-schedule@.timer`
 - `/usr/share/doc/proxsnap/README.md`
 - `/usr/share/doc/proxsnap/examples/proxsnap.toml`
 

@@ -46,6 +46,8 @@ pub enum TopCommand {
     Nas(NasCommand),
     #[command(subcommand)]
     San(SanCommand),
+    #[command(subcommand)]
+    Schedule(ScheduleCommand),
 }
 
 #[derive(Debug, Subcommand)]
@@ -134,13 +136,26 @@ pub enum SanStorageCommand {
     Show(StorageArgs),
 }
 
+#[derive(Debug, Subcommand)]
+pub enum ScheduleCommand {
+    Run(ScheduleNameArgs),
+    Create(ScheduleNameArgs),
+    Delete(ScheduleNameArgs),
+    List,
+}
+
+#[derive(Debug, Args)]
+pub struct ScheduleNameArgs {
+    pub name: String,
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
 
     use super::{
         Cli, NasCommand, NasStorageCommand, OutputFormat, SanCommand, SanStorageCommand,
-        TopCommand, VmCommand,
+        ScheduleCommand, TopCommand, VmCommand,
     };
 
     #[test]
@@ -241,5 +256,35 @@ mod tests {
         .expect("cli should parse");
 
         assert_eq!(cli.output, OutputFormat::Json);
+    }
+
+    #[test]
+    fn parses_schedule_commands() {
+        let cli = Cli::try_parse_from(["proxsnap", "schedule", "run", "daily"])
+            .expect("cli should parse");
+        match cli.command {
+            TopCommand::Schedule(ScheduleCommand::Run(args)) => assert_eq!(args.name, "daily"),
+            _ => panic!("unexpected command shape"),
+        }
+
+        let cli = Cli::try_parse_from(["proxsnap", "schedule", "create", "daily"])
+            .expect("cli should parse");
+        match cli.command {
+            TopCommand::Schedule(ScheduleCommand::Create(args)) => assert_eq!(args.name, "daily"),
+            _ => panic!("unexpected command shape"),
+        }
+
+        let cli = Cli::try_parse_from(["proxsnap", "schedule", "delete", "daily"])
+            .expect("cli should parse");
+        match cli.command {
+            TopCommand::Schedule(ScheduleCommand::Delete(args)) => assert_eq!(args.name, "daily"),
+            _ => panic!("unexpected command shape"),
+        }
+
+        let cli = Cli::try_parse_from(["proxsnap", "schedule", "list"]).expect("cli should parse");
+        assert!(matches!(
+            cli.command,
+            TopCommand::Schedule(ScheduleCommand::List)
+        ));
     }
 }

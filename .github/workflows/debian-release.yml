@@ -59,6 +59,9 @@ jobs:
       - name: Lint
         run: cargo clippy --locked --all-targets -- -D warnings
 
+      - name: Check installer syntax
+        run: bash -n install.sh
+
       - name: Build amd64 Debian package
         run: |
           mkdir -p dist

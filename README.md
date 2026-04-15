@@ -39,6 +39,22 @@ cargo deb -- --locked
 
 Release builds are automated by GitHub Actions. Pushing a version tag such as `v0.1.0` runs tests, lints, builds `amd64` and `arm64` Debian packages, generates `SHA256SUMS`, and uploads the files to the GitHub Release for that tag.
 
+## Install
+
+Install the latest release on Debian-compatible `amd64` or `arm64` systems:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/proxsnap/main/install.sh | bash
+```
+
+Install a specific release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/proxsnap/main/install.sh | PROXSNAP_VERSION=v0.1.0 bash
+```
+
+The installer downloads the matching `.deb` package from `https://github.com/abdoufermat5/proxsnap/releases`, verifies it against the release `SHA256SUMS`, and installs it with `apt-get` or `dpkg`.
+
 ## CLI
 
 Top-level help:
@@ -184,6 +200,8 @@ The generated package installs:
 - `/usr/share/doc/proxsnap/examples/proxsnap.toml`
 
 The release workflow is `.github/workflows/debian-release.yml`. It only runs for tags matching `v*`, requires the tag version to match `Cargo.toml`, and builds on Ubuntu 22.04 to keep the generated package compatible with Debian 12 / Proxmox 8 era `libc6` versions.
+
+The root `install.sh` script is designed for `curl | bash` installation from GitHub Releases. Set `PROXSNAP_VERSION` to pin a specific tag; omit it to install the latest release.
 
 ## Verification
 

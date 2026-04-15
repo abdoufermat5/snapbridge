@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod clients;
 pub mod config;
+pub mod display;
 pub mod error;
 pub mod models;
 pub mod shell;
@@ -10,13 +11,15 @@ pub mod workflows;
 use crate::cli::{Cli, NasCommand, NasStorageCommand, SanCommand, SanStorageCommand, VmCommand};
 use crate::clients::ontap::ReqwestOntapClient;
 use crate::clients::proxmox::ReqwestProxmoxClient;
-use crate::config::{LoadedConfig, StorageConfig};
+use crate::config::{LoadedConfig, StorageBackend, StorageConfig};
+use crate::display::SnapshotRow;
 use crate::error::Result;
 use crate::shell::TokioShellRunner;
 use crate::workflows::nas;
 use crate::workflows::san;
 
 pub async fn run(cli: Cli) -> Result<()> {
+    let output = cli.output;
     let config = LoadedConfig::from_path(&cli.config)?;
     let proxmox = ReqwestProxmoxClient::new(&config.proxmox)?;
     let shell = TokioShellRunner;
@@ -59,13 +62,31 @@ pub async fn run(cli: Cli) -> Result<()> {
                     .await
                 }
                 NasStorageCommand::List(args) => {
-                    nas::list_storage_snapshots(
-                        &config,
-                        &proxmox,
-                        &ontap_for_storage(&config, &args.storage)?,
-                        &args.storage,
-                    )
-                    .await
+                    if let Some(storage_id) = args.storage.as_deref() {
+                        nas::list_storage_snapshots(
+                            &config,
+                            &proxmox,
+                            &ontap_for_storage(&config, storage_id)?,
+                            storage_id,
+                            output,
+                        )
+                        .await
+                    } else {
+                        let mut snapshots = Vec::<SnapshotRow>::new();
+                        for storage_id in config.storage_ids_for_backend(StorageBackend::Nas) {
+                            snapshots.extend(
+                                nas::storage_snapshot_rows(
+                                    &config,
+                                    &proxmox,
+                                    &ontap_for_storage(&config, storage_id)?,
+                                    storage_id,
+                                )
+                                .await?,
+                            );
+                        }
+
+                        crate::display::print_snapshots_with_storage(output, &snapshots, true)
+                    }
                 }
                 NasStorageCommand::Mount(args) => {
                     nas::mount_storage_snapshot(
@@ -92,6 +113,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                         &proxmox,
                         &ontap_for_storage(&config, &args.storage)?,
                         &args.storage,
+                        output,
                     )
                     .await
                 }
@@ -131,13 +153,30 @@ pub async fn run(cli: Cli) -> Result<()> {
                     .await
                 }
                 SanStorageCommand::List(args) => {
-                    san::list_storage_snapshots(
-                        &config,
-                        &proxmox,
-                        &ontap_for_storage(&config, &args.storage)?,
-                        &args.storage,
-                    )
-                    .await
+                    if let Some(storage_id) = args.storage.as_deref() {
+                        san::list_storage_snapshots(
+                            &config,
+                            &proxmox,
+                            &ontap_for_storage(&config, storage_id)?,
+                            storage_id,
+                            output,
+                        )
+                        .await
+                    } else {
+                        let mut snapshots = Vec::<SnapshotRow>::new();
+                        for storage_id in config.storage_ids_for_backend(StorageBackend::San) {
+                            snapshots.extend(
+                                san::storage_snapshot_rows(
+                                    &config,
+                                    &ontap_for_storage(&config, storage_id)?,
+                                    storage_id,
+                                )
+                                .await?,
+                            );
+                        }
+
+                        crate::display::print_snapshots_with_storage(output, &snapshots, true)
+                    }
                 }
                 SanStorageCommand::Show(args) => {
                     san::show_storage(
@@ -145,6 +184,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                         &proxmox,
                         &ontap_for_storage(&config, &args.storage)?,
                         &args.storage,
+                        output,
                     )
                     .await
                 }

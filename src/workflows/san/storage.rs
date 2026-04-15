@@ -1,9 +1,11 @@
 use log::{info, warn};
-use serde_json::to_string_pretty;
+use serde::Serialize;
+use serde_json::{Value, json};
 
 use crate::clients::ontap::OntapApi;
 use crate::clients::proxmox::ProxmoxApi;
 use crate::config::{LoadedConfig, SanStorageConfig, StorageBackend, StorageConfig};
+use crate::display::{DetailSection, OutputFormat, SnapshotRow};
 use crate::error::{AppError, Result};
 use crate::shell::ShellRunner;
 use crate::util::ontap_snapshot_name;
@@ -123,27 +125,39 @@ pub async fn list_storage_snapshots<P, O>(
     _: &P,
     ontap: &O,
     storage_id: &str,
+    output: OutputFormat,
 ) -> Result<()>
 where
     P: ProxmoxApi,
+    O: OntapApi,
+{
+    let snapshots = storage_snapshot_rows(config, ontap, storage_id).await?;
+    crate::display::print_snapshots(output, &snapshots)
+}
+
+pub async fn storage_snapshot_rows<O>(
+    config: &LoadedConfig,
+    ontap: &O,
+    storage_id: &str,
+) -> Result<Vec<SnapshotRow>>
+where
     O: OntapApi,
 {
     let san_config = require_san_config(config, storage_id)?;
     let volume = ontap.get_volume_by_name(&san_config.volume_name).await?;
     let snapshots = ontap.list_snapshots(&volume.uuid).await?;
 
-    for snapshot in snapshots
+    Ok(snapshots
         .into_iter()
         .filter(|snapshot| snapshot.name.starts_with("proxmox_snapshot_"))
-    {
-        println!(
-            "Name: {}, Comment: {}",
-            snapshot.name,
-            snapshot.comment.unwrap_or_default()
-        );
-    }
-
-    Ok(())
+        .map(|snapshot| {
+            SnapshotRow::new(
+                storage_id,
+                snapshot.name,
+                snapshot.comment.unwrap_or_default(),
+            )
+        })
+        .collect())
 }
 
 pub async fn show_storage<P, O>(
@@ -151,6 +165,7 @@ pub async fn show_storage<P, O>(
     _: &P,
     ontap: &O,
     storage_id: &str,
+    output: OutputFormat,
 ) -> Result<()>
 where
     P: ProxmoxApi,
@@ -160,48 +175,85 @@ where
     let volume = ontap.get_volume_by_name(&san_config.volume_name).await?;
     let lun = ontap.get_lun_by_name(&san_config.lun_path).await?;
     let mappings = ontap.list_lun_maps().await?;
+    let volume_detail = ontap.get_volume_detail(&volume.uuid).await?;
+    let lun_detail = ontap.get_lun_detail(&lun.uuid).await?;
 
-    println!("=== Volume Info ===");
-    println!(
-        "{}",
-        to_string_pretty(&ontap.get_volume_detail(&volume.uuid).await?)?
-    );
-
-    println!();
-    println!("=== LUN Info ===");
-    println!(
-        "{}",
-        to_string_pretty(&ontap.get_lun_detail(&lun.uuid).await?)?
-    );
-
-    println!();
-    println!("=== iGroups (discovered from LUN mappings) ===");
+    let mut igroups = Vec::new();
     for mapping in mappings
         .iter()
         .filter(|mapping| mapping.lun_name.as_deref() == Some(&san_config.lun_path))
     {
         if let Some(igroup_name) = &mapping.igroup_name {
-            println!();
-            println!("--- {igroup_name} ---");
-            println!(
-                "{}",
-                to_string_pretty(&ontap.get_igroup_detail(igroup_name).await?)?
-            );
+            igroups.push(IgroupDetail {
+                name: igroup_name.clone(),
+                detail: ontap.get_igroup_detail(igroup_name).await?,
+            });
         }
     }
 
-    println!();
-    println!("=== LUN Mappings ===");
-    for mapping in mappings.into_iter().filter(|mapping| {
-        mapping
-            .lun_name
-            .as_deref()
-            .is_some_and(|name| name.contains(&san_config.volume_name))
-    }) {
-        println!("{}", to_string_pretty(&mapping.raw)?);
-    }
+    let lun_mappings = mappings
+        .into_iter()
+        .filter(|mapping| {
+            mapping
+                .lun_name
+                .as_deref()
+                .is_some_and(|name| name.contains(&san_config.volume_name))
+        })
+        .map(|mapping| mapping.raw)
+        .collect::<Vec<_>>();
 
-    Ok(())
+    let display = SanStorageDetail {
+        volume: volume_detail,
+        lun: lun_detail,
+        igroups,
+        lun_mappings,
+    };
+
+    let mut sections = vec![
+        DetailSection::new("Volume Info", display.volume.clone()),
+        DetailSection::new("LUN Info", display.lun.clone()),
+    ];
+
+    let igroup_section = if display.igroups.is_empty() {
+        json!([])
+    } else {
+        Value::Array(
+            display
+                .igroups
+                .iter()
+                .map(|igroup| {
+                    json!({
+                        "name": igroup.name.clone(),
+                        "detail": igroup.detail.clone(),
+                    })
+                })
+                .collect(),
+        )
+    };
+    sections.push(DetailSection::new(
+        "iGroups (discovered from LUN mappings)",
+        igroup_section,
+    ));
+    sections.push(DetailSection::new(
+        "LUN Mappings",
+        Value::Array(display.lun_mappings.clone()),
+    ));
+
+    crate::display::print_sections(output, &sections, &display)
+}
+
+#[derive(Debug, Serialize)]
+struct SanStorageDetail {
+    volume: Value,
+    lun: Value,
+    igroups: Vec<IgroupDetail>,
+    lun_mappings: Vec<Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct IgroupDetail {
+    name: String,
+    detail: Value,
 }
 
 fn require_san_config<'a>(

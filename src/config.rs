@@ -12,6 +12,20 @@ pub struct LoadedConfig {
     pub storage: BTreeMap<String, StorageConfig>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ConfigDocument {
+    Modern(LoadedConfig),
+    Legacy(LegacyLoadedConfig),
+}
+
+#[derive(Debug, Deserialize)]
+struct LegacyLoadedConfig {
+    proxmox: ProxmoxConfig,
+    #[serde(flatten)]
+    storage: BTreeMap<String, StorageConfig>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProxmoxConfig {
     pub host: String,
@@ -65,8 +79,18 @@ pub struct SanStorageConfig {
 impl LoadedConfig {
     pub fn from_path(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)?;
-        let config: Self = toml::from_str(&content)?;
-        Ok(config)
+        Self::parse(&content)
+    }
+
+    pub fn parse(content: &str) -> Result<Self> {
+        let document: ConfigDocument = toml::from_str(content)?;
+        Ok(match document {
+            ConfigDocument::Modern(config) => config,
+            ConfigDocument::Legacy(config) => Self {
+                proxmox: config.proxmox,
+                storage: config.storage,
+            },
+        })
     }
 
     pub fn storage(&self, id: &str) -> Result<&StorageConfig> {
@@ -90,6 +114,20 @@ impl LoadedConfig {
         }
 
         Ok(storage)
+    }
+
+    pub fn storage_ids_for_backend(&self, expected: StorageBackend) -> Vec<&str> {
+        self.storage
+            .iter()
+            .filter_map(|(id, storage)| {
+                let actual = match storage {
+                    StorageConfig::Nas(_) => StorageBackend::Nas,
+                    StorageConfig::San(_) => StorageBackend::San,
+                };
+
+                (actual == expected).then_some(id.as_str())
+            })
+            .collect()
     }
 }
 
@@ -138,7 +176,7 @@ mod tests {
 
     #[test]
     fn parses_toml_and_routes_clone_storage() {
-        let config: LoadedConfig = toml::from_str(
+        let config = LoadedConfig::parse(
             r#"
             [proxmox]
             host = "pve.local"
@@ -174,6 +212,56 @@ mod tests {
             config
                 .require_backend("SAN01", StorageBackend::Nas)
                 .is_err()
+        );
+        assert_eq!(
+            config.storage_ids_for_backend(StorageBackend::Nas),
+            vec!["NAS01"]
+        );
+        assert_eq!(
+            config.storage_ids_for_backend(StorageBackend::San),
+            vec!["SAN01"]
+        );
+    }
+
+    #[test]
+    fn parses_legacy_top_level_storage_sections() {
+        let config = LoadedConfig::parse(
+            r#"
+            [proxmox]
+            host = "pve.local"
+            user = "root@pam"
+            token_name = "snap"
+            token_value = "secret"
+            verify_ssl = false
+
+            [NAS01]
+            backend = "nas"
+            ontap_host = "ontap.local"
+            ontap_user = "admin"
+            ontap_password = "pw"
+            verify_ssl = false
+
+            [SAN01]
+            backend = "san"
+            ontap_host = "ontap.local"
+            ontap_user = "admin"
+            ontap_password = "pw"
+            verify_ssl = false
+            volume_name = "san_vol1"
+            lun_path = "/vol/san_vol1/lun0"
+            "#,
+        )
+        .expect("legacy config should parse");
+
+        assert!(config.require_backend("NAS01", StorageBackend::Nas).is_ok());
+        assert!(config.require_backend("SAN01", StorageBackend::San).is_ok());
+        assert_eq!(
+            config.storage_ids_for_backend(StorageBackend::Nas),
+            vec!["NAS01"]
+        );
+        assert_eq!(
+            config.storage_ids_for_backend(StorageBackend::San),
+            vec!["SAN01"]
         );
     }
 }

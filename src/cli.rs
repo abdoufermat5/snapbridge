@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
+use crate::display::OutputFormat;
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum LogLevel {
     Error,
@@ -30,6 +32,9 @@ pub struct Cli {
 
     #[arg(long, value_enum, default_value = "info")]
     pub log_level: LogLevel,
+
+    #[arg(long, value_enum, default_value = "table", global = true)]
+    pub output: OutputFormat,
 
     #[command(subcommand)]
     pub command: TopCommand,
@@ -103,12 +108,18 @@ pub struct StorageArgs {
     pub storage: String,
 }
 
+#[derive(Debug, Args)]
+pub struct OptionalStorageArgs {
+    #[arg(long)]
+    pub storage: Option<String>,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum NasStorageCommand {
     Create(CreateStorageArgs),
     Restore(SnapshotStorageArgs),
     Delete(SnapshotStorageArgs),
-    List(StorageArgs),
+    List(OptionalStorageArgs),
     Mount(SnapshotStorageArgs),
     Unmount(StorageArgs),
     Show(StorageArgs),
@@ -119,7 +130,7 @@ pub enum SanStorageCommand {
     Create(CreateStorageArgs),
     Restore(SnapshotStorageArgs),
     Delete(SnapshotStorageArgs),
-    List(StorageArgs),
+    List(OptionalStorageArgs),
     Show(StorageArgs),
 }
 
@@ -127,7 +138,10 @@ pub enum SanStorageCommand {
 mod tests {
     use clap::Parser;
 
-    use super::{Cli, NasCommand, SanCommand, SanStorageCommand, TopCommand, VmCommand};
+    use super::{
+        Cli, NasCommand, NasStorageCommand, OutputFormat, SanCommand, SanStorageCommand,
+        TopCommand, VmCommand,
+    };
 
     #[test]
     fn parses_nas_vm_command() {
@@ -173,5 +187,48 @@ mod tests {
             }
             _ => panic!("unexpected command shape"),
         }
+    }
+
+    #[test]
+    fn parses_nas_storage_list_without_storage_filter() {
+        let cli =
+            Cli::try_parse_from(["proxsnap", "nas", "storage", "list"]).expect("cli should parse");
+
+        match cli.command {
+            TopCommand::Nas(NasCommand::Storage(NasStorageCommand::List(args))) => {
+                assert_eq!(args.storage, None);
+            }
+            _ => panic!("unexpected command shape"),
+        }
+    }
+
+    #[test]
+    fn parses_san_storage_list_without_storage_filter() {
+        let cli =
+            Cli::try_parse_from(["proxsnap", "san", "storage", "list"]).expect("cli should parse");
+
+        match cli.command {
+            TopCommand::San(SanCommand::Storage(SanStorageCommand::List(args))) => {
+                assert_eq!(args.storage, None);
+            }
+            _ => panic!("unexpected command shape"),
+        }
+    }
+
+    #[test]
+    fn parses_global_output_format_after_subcommand() {
+        let cli = Cli::try_parse_from([
+            "proxsnap",
+            "nas",
+            "storage",
+            "list",
+            "--storage",
+            "NAS01",
+            "--output",
+            "json",
+        ])
+        .expect("cli should parse");
+
+        assert_eq!(cli.output, OutputFormat::Json);
     }
 }

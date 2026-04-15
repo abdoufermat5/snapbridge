@@ -43,6 +43,7 @@ Main commands:
 ```bash
 proxsnap nas vm create --vm 100 --suspend
 proxsnap nas storage create --storage NAS01 --fsfreeze
+proxsnap nas storage list
 proxsnap nas storage list --storage NAS01
 proxsnap nas storage mount --storage NAS01 --snapshot proxmox_snapshot_2026-04-14_02:00:00+0200
 

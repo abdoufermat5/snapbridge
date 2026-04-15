@@ -1,9 +1,9 @@
 use log::{info, warn};
-use serde_json::to_string_pretty;
 
 use crate::clients::ontap::OntapApi;
 use crate::clients::proxmox::ProxmoxApi;
 use crate::config::{LoadedConfig, StorageBackend};
+use crate::display::{OutputFormat, SnapshotRow};
 use crate::error::{AppError, Result};
 use crate::models::{FlexCloneRequest, ProxmoxStorage, VmRef};
 use crate::util::{ontap_snapshot_name, pve_snapshot_name};
@@ -119,7 +119,22 @@ pub async fn list_storage_snapshots<P, O>(
     proxmox: &P,
     ontap: &O,
     storage_id: &str,
+    output: OutputFormat,
 ) -> Result<()>
+where
+    P: ProxmoxApi,
+    O: OntapApi,
+{
+    let snapshots = storage_snapshot_rows(config, proxmox, ontap, storage_id).await?;
+    crate::display::print_snapshots(output, &snapshots)
+}
+
+pub async fn storage_snapshot_rows<P, O>(
+    config: &LoadedConfig,
+    proxmox: &P,
+    ontap: &O,
+    storage_id: &str,
+) -> Result<Vec<SnapshotRow>>
 where
     P: ProxmoxApi,
     O: OntapApi,
@@ -129,18 +144,17 @@ where
     let volume = ontap.get_volume_by_name(&volume_name).await?;
     let snapshots = ontap.list_snapshots(&volume.uuid).await?;
 
-    for snapshot in snapshots
+    Ok(snapshots
         .into_iter()
         .filter(|snapshot| snapshot.name.starts_with("proxmox_snapshot_"))
-    {
-        println!(
-            "Name: {}, Comment: {}",
-            snapshot.name,
-            snapshot.comment.unwrap_or_default()
-        );
-    }
-
-    Ok(())
+        .map(|snapshot| {
+            SnapshotRow::new(
+                storage_id,
+                snapshot.name,
+                snapshot.comment.unwrap_or_default(),
+            )
+        })
+        .collect())
 }
 
 pub async fn mount_storage_snapshot<P, O>(
@@ -213,6 +227,7 @@ pub async fn show_storage<P, O>(
     proxmox: &P,
     ontap: &O,
     storage_id: &str,
+    output: OutputFormat,
 ) -> Result<()>
 where
     P: ProxmoxApi,
@@ -222,6 +237,5 @@ where
     let volume_name = resolve_nas_volume_name(proxmox, storage_id).await?;
     let volume = ontap.get_volume_by_name(&volume_name).await?;
     let detail = ontap.get_volume_detail(&volume.uuid).await?;
-    println!("{}", to_string_pretty(&detail)?);
-    Ok(())
+    crate::display::print_detail(output, "Volume Info", &detail)
 }

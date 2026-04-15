@@ -19,13 +19,15 @@ use super::discovery::{get_vms_by_storage, wait_for_task};
 use super::storage::{create_storage_snapshot, mount_storage_snapshot};
 use super::vm::create_vm_snapshot_with_factory;
 
+type TaskQueues = HashMap<(String, String), VecDeque<TaskStatus>>;
+
 #[derive(Clone, Default)]
 struct MockProxmox {
     nodes: Vec<Node>,
     status_by_vm: HashMap<(String, u32), VmStatus>,
     config_by_vm: HashMap<(String, u32), VmConfig>,
     vms_by_node: HashMap<String, Vec<VmSummary>>,
-    tasks: Arc<Mutex<HashMap<(String, String), VecDeque<TaskStatus>>>>,
+    tasks: Arc<Mutex<TaskQueues>>,
     storage_defs: HashMap<String, ProxmoxStorage>,
     calls: Arc<Mutex<Vec<String>>>,
 }

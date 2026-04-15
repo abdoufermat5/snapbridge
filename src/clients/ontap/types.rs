@@ -45,7 +45,8 @@ pub(crate) struct NameRecord {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct PathRecord {
-    pub(crate) path: String,
+    #[serde(default)]
+    pub(crate) path: Option<String>,
 }
 
 impl From<VolumeRecord> for OntapVolume {
@@ -54,7 +55,7 @@ impl From<VolumeRecord> for OntapVolume {
             uuid: value.uuid,
             name: value.name,
             svm_name: value.svm.name,
-            nas_path: value.nas.map(|nas| nas.path),
+            nas_path: value.nas.and_then(|nas| nas.path),
             is_flexclone: value.clone.is_some_and(|clone| clone.is_flexclone),
         }
     }
@@ -76,5 +77,29 @@ impl From<LunRecord> for OntapLun {
             uuid: value.uuid,
             name: value.name,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{RecordsEnvelope, VolumeRecord};
+    use crate::models::OntapVolume;
+
+    #[test]
+    fn deserializes_volume_with_nas_object_without_path() {
+        let envelope: RecordsEnvelope<VolumeRecord> = serde_json::from_value(json!({
+            "records": [{
+                "uuid": "vol-1",
+                "name": "san_vol1",
+                "svm": { "name": "svm1" },
+                "nas": {}
+            }]
+        }))
+        .expect("volume should deserialize");
+
+        let volume: OntapVolume = envelope.records.into_iter().next().unwrap().into();
+        assert_eq!(volume.nas_path, None);
     }
 }

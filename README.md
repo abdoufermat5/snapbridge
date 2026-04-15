@@ -120,7 +120,16 @@ proxsnap --log-level debug san storage create --storage SAN01 --fsfreeze
 
 ## Config
 
-The CLI reads `./proxsnap.toml` by default. Override it with `--config <path>`.
+The installed package reads `/etc/proxsnap/proxsnap.toml` by default. The Debian package installs a copy of `proxsnap.example.toml` there with mode `600`.
+
+Edit it after installation:
+
+```bash
+sudo nano /etc/proxsnap/proxsnap.toml
+sudo chmod 600 /etc/proxsnap/proxsnap.toml
+```
+
+Override the config path with `--config <path>` when needed.
 
 Example:
 
@@ -196,6 +205,7 @@ Debian package metadata lives in `Cargo.toml` under `[package.metadata.deb]`.
 
 The generated package installs:
 - `/usr/bin/proxsnap`
+- `/etc/proxsnap/proxsnap.toml`
 - `/usr/share/doc/proxsnap/README.md`
 - `/usr/share/doc/proxsnap/examples/proxsnap.toml`
 

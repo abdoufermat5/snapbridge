@@ -13,6 +13,7 @@ priority = "optional"
 extended-description = "proxsnap is an operator CLI for creating, listing, restoring, mounting, and deleting Proxmox snapshots on NetApp ONTAP-backed NAS and SAN storage."
 assets = [
     ["target/release/proxsnap", "usr/bin/", "755"],
+    ["proxsnap.example.toml", "etc/proxsnap/proxsnap.toml", "600"],
     ["README.md", "usr/share/doc/proxsnap/README.md", "644"],
     ["proxsnap.example.toml", "usr/share/doc/proxsnap/examples/proxsnap.toml", "644"],
 ]

@@ -27,7 +27,7 @@ impl LogLevel {
 #[command(name = "proxsnap")]
 #[command(about = "Proxmox + ONTAP snapshot workflows for NAS and SAN storage")]
 pub struct Cli {
-    #[arg(long, default_value = "proxsnap.toml")]
+    #[arg(long, default_value = "/etc/proxsnap/proxsnap.toml")]
     pub config: PathBuf,
 
     #[arg(long, value_enum, default_value = "info")]
@@ -164,6 +164,17 @@ mod tests {
             }
             _ => panic!("unexpected command shape"),
         }
+    }
+
+    #[test]
+    fn defaults_to_system_config_path() {
+        let cli =
+            Cli::try_parse_from(["proxsnap", "nas", "storage", "list"]).expect("cli should parse");
+
+        assert_eq!(
+            cli.config,
+            std::path::PathBuf::from("/etc/proxsnap/proxsnap.toml")
+        );
     }
 
     #[test]

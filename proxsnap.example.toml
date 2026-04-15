@@ -1,0 +1,24 @@
+[proxmox]
+host = "pve.example.local"
+user = "root@pam"
+token_name = "proxsnap"
+token_value = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+verify_ssl = false
+timezone = "Europe/Paris"
+
+[storage.NAS01]
+backend = "nas"
+ontap_host = "ontap-mgmt.example.local"
+ontap_user = "admin"
+ontap_password = "secret"
+verify_ssl = false
+
+[storage.SAN01]
+backend = "san"
+ontap_host = "ontap-mgmt.example.local"
+ontap_user = "admin"
+ontap_password = "secret"
+verify_ssl = false
+volume_name = "san_vol1"
+lun_path = "/vol/san_vol1/lun0"
+ssh_user = "root"

@@ -2,6 +2,20 @@
 name = "proxsnap"
 version = "0.1.0"
 edition = "2024"
+description = "Proxmox and NetApp ONTAP snapshot workflows for NAS and SAN storage"
+readme = "README.md"
+
+[package.metadata.deb]
+maintainer = "Proxsnap Maintainers <noreply@example.com>"
+depends = "$auto"
+section = "admin"
+priority = "optional"
+extended-description = "proxsnap is an operator CLI for creating, listing, restoring, mounting, and deleting Proxmox snapshots on NetApp ONTAP-backed NAS and SAN storage."
+assets = [
+    ["target/release/proxsnap", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/proxsnap/README.md", "644"],
+    ["proxsnap.example.toml", "usr/share/doc/proxsnap/examples/proxsnap.toml", "644"],
+]
 
 [dependencies]
 async-trait = "0.1.89"

@@ -2,7 +2,7 @@
 
 `proxsnap` is a Rust CLI for managing Proxmox snapshots on NetApp ONTAP-backed storage.
 
-It ports the behavior from `cloudsante-pve-ontap-snapshot` into a single binary with two operator-facing backends:
+It ports some behavior from `pve-ontap-snapshot` (https://github.com/credativ/pve-ontap-snapshot) into a single binary with two operator-facing backends:
 - `nas` for ONTAP-backed NAS/NFS storage
 - `san` for ONTAP-backed iSCSI/LVM storage
 
@@ -29,6 +29,15 @@ Run the CLI:
 ```bash
 cargo run -- --help
 ```
+
+Build a local Debian package when `cargo-deb` is installed:
+
+```bash
+cargo install cargo-deb --version 3.6.3 --locked
+cargo deb -- --locked
+```
+
+Release builds are automated by GitHub Actions. Pushing a version tag such as `v0.1.0` runs tests, lints, builds `amd64` and `arm64` Debian packages, generates `SHA256SUMS`, and uploads the files to the GitHub Release for that tag.
 
 ## CLI
 
@@ -165,12 +174,29 @@ Rough responsibilities:
 - `workflows/` contains the NAS and SAN behavior layers
 - `config.rs`, `models.rs`, `util.rs`, and `error.rs` contain shared support code
 
+## Packaging
+
+Debian package metadata lives in `Cargo.toml` under `[package.metadata.deb]`.
+
+The generated package installs:
+- `/usr/bin/proxsnap`
+- `/usr/share/doc/proxsnap/README.md`
+- `/usr/share/doc/proxsnap/examples/proxsnap.toml`
+
+The release workflow is `.github/workflows/debian-release.yml`. It only runs for tags matching `v*`, requires the tag version to match `Cargo.toml`, and builds on Ubuntu 22.04 to keep the generated package compatible with Debian 12 / Proxmox 8 era `libc6` versions.
+
 ## Verification
 
 Run the test suite:
 
 ```bash
 cargo test
+```
+
+Run the same lint gate used by CI:
+
+```bash
+cargo clippy --locked --all-targets -- -D warnings
 ```
 
 At the moment the tests are mock-driven unit/integration-style checks around workflow behavior. They lock the current command flow and refactor safety, but they do not replace a real lab validation against your Proxmox and ONTAP APIs.

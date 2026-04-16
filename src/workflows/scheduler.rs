@@ -218,15 +218,15 @@ fn retention_deletions(
     policy: RetentionPolicy,
     now: DateTime<Utc>,
 ) -> Vec<OntapSnapshot> {
-    let mut proxsnap_snapshots = snapshots
+    let mut snapbridge_snapshots = snapshots
         .iter()
         .filter_map(|snapshot| {
             parse_snapshot_timestamp(&snapshot.name).map(|created_at| (snapshot, created_at))
         })
         .collect::<Vec<_>>();
-    proxsnap_snapshots.sort_by(|(_, left), (_, right)| right.cmp(left));
+    snapbridge_snapshots.sort_by(|(_, left), (_, right)| right.cmp(left));
 
-    proxsnap_snapshots
+    snapbridge_snapshots
         .into_iter()
         .enumerate()
         .filter_map(|(index, (snapshot, created_at))| {
@@ -306,7 +306,7 @@ mod tests {
     };
 
     #[test]
-    fn parses_proxsnap_snapshot_timestamp() {
+    fn parses_snapbridge_snapshot_timestamp() {
         let parsed = parse_snapshot_timestamp("proxmox_snapshot_2026-04-15_02:15:06+0200")
             .expect("timestamp should parse");
 

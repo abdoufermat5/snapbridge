@@ -1,0 +1,9 @@
+[Unit]
+Description=Run snapbridge schedule %i
+Documentation=file:/usr/share/doc/snapbridge/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/snapbridge --config /etc/snapbridge/snapbridge.toml schedule run %i

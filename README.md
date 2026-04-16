@@ -1,6 +1,6 @@
-# Proxsnap
+# Snapbridge
 
-`proxsnap` is a Rust CLI for managing Proxmox snapshots on NetApp ONTAP-backed storage.
+`snapbridge` is a Rust CLI for managing Proxmox snapshots on NetApp ONTAP-backed storage.
 
 It ports some behavior from `pve-ontap-snapshot` (https://github.com/credativ/pve-ontap-snapshot) into a single binary with two operator-facing backends:
 - `nas` for ONTAP-backed NAS/NFS storage
@@ -9,9 +9,9 @@ It ports some behavior from `pve-ontap-snapshot` (https://github.com/credativ/pv
 ## Status
 
 Current implementation covers:
-- `proxsnap nas vm create`
-- `proxsnap nas storage create|restore|delete|list|mount|unmount|show`
-- `proxsnap san storage create|restore|delete|list|show`
+- `snapbridge nas vm create`
+- `snapbridge nas storage create|restore|delete|list|mount|unmount|show`
+- `snapbridge san storage create|restore|delete|list|show`
 
 Not included yet:
 - retention cleanup helpers
@@ -37,54 +37,54 @@ cargo install cargo-deb --version 3.6.3 --locked
 cargo deb -- --locked
 ```
 
-Release builds are automated by GitHub Actions. Pushing a version tag such as `v0.1.0` runs tests, lints, builds `amd64` and `arm64` Debian packages, generates `SHA256SUMS`, and uploads the files to the GitHub Release for that tag.
+Release builds are automated by GitHub Actions. Pushing a version tag such as `v0.2.0` runs tests, lints, builds `amd64` and `arm64` Debian packages, generates `SHA256SUMS`, and uploads the files to the GitHub Release for that tag.
 
 ## Install
 
 Install the latest release on Debian-compatible `amd64` or `arm64` systems:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/abdoufermat5/proxsnap/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/snapbridge/main/install.sh | bash
 ```
 
 Install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/abdoufermat5/proxsnap/main/install.sh | PROXSNAP_VERSION=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/snapbridge/main/install.sh | SNAPBRIDGE_VERSION=v0.2.0 bash
 ```
 
-The installer downloads the matching `.deb` package from `https://github.com/abdoufermat5/proxsnap/releases`, verifies it against the release `SHA256SUMS`, and installs it with `apt-get` or `dpkg`.
+The installer downloads the matching `.deb` package from `https://github.com/abdoufermat5/snapbridge/releases`, verifies it against the release `SHA256SUMS`, and installs it with `apt-get` or `dpkg`.
 
 ## CLI
 
 Top-level help:
 
 ```bash
-proxsnap --help
+snapbridge --help
 ```
 
 Main commands:
 
 ```bash
-proxsnap nas vm create --vm 100 --suspend
-proxsnap nas storage create --storage NAS01 --fsfreeze
-proxsnap nas storage list
-proxsnap nas storage list --storage NAS01
-proxsnap nas storage list --output json
-proxsnap nas storage mount --storage NAS01 --snapshot proxmox_snapshot_2026-04-14_02:00:00+0200
+snapbridge nas vm create --vm 100 --suspend
+snapbridge nas storage create --storage NAS01 --fsfreeze
+snapbridge nas storage list
+snapbridge nas storage list --storage NAS01
+snapbridge nas storage list --output json
+snapbridge nas storage mount --storage NAS01 --snapshot proxmox_snapshot_2026-04-14_02:00:00+0200
 
-proxsnap san storage create --storage SAN01 --fsfreeze
-proxsnap san storage list
-proxsnap san storage list --storage SAN01
-proxsnap san storage list --output json
-proxsnap san storage restore --storage SAN01 --snapshot proxmox_snapshot_2026-04-14_02:15:00+0200
-proxsnap san storage show --storage SAN01
-proxsnap san storage show --storage SAN01 --output json
+snapbridge san storage create --storage SAN01 --fsfreeze
+snapbridge san storage list
+snapbridge san storage list --storage SAN01
+snapbridge san storage list --output json
+snapbridge san storage restore --storage SAN01 --snapshot proxmox_snapshot_2026-04-14_02:15:00+0200
+snapbridge san storage show --storage SAN01
+snapbridge san storage show --storage SAN01 --output json
 
-proxsnap schedule list
-proxsnap schedule run daily
-proxsnap schedule create daily
-proxsnap schedule delete daily
+snapbridge schedule list
+snapbridge schedule run daily
+snapbridge schedule create daily
+snapbridge schedule delete daily
 ```
 
 ### Output
@@ -92,15 +92,15 @@ proxsnap schedule delete daily
 Human-readable table output is the default:
 
 ```bash
-proxsnap nas storage list
-proxsnap san storage list
+snapbridge nas storage list
+snapbridge san storage list
 ```
 
 Use `--output json` when piping to scripts or other tools:
 
 ```bash
-proxsnap nas storage list --output json
-proxsnap san storage show --storage SAN01 --output json
+snapbridge nas storage list --output json
+snapbridge san storage show --storage SAN01 --output json
 ```
 
 `nas storage list` and `san storage list` list all configured storage entries for their backend when `--storage` is omitted. Add `--storage <id>` to limit the output to one configured storage.
@@ -119,19 +119,19 @@ The default log level is `info`, so snapshot creation prints progress as it runs
 Use `--log-level warn` for quieter output or `--log-level debug` to include HTTP response debug logs:
 
 ```bash
-proxsnap --log-level warn nas storage create --storage NAS01
-proxsnap --log-level debug san storage create --storage SAN01 --fsfreeze
+snapbridge --log-level warn nas storage create --storage NAS01
+snapbridge --log-level debug san storage create --storage SAN01 --fsfreeze
 ```
 
 ## Config
 
-The installed package reads `/etc/proxsnap/proxsnap.toml` by default. The Debian package installs a copy of `proxsnap.example.toml` there with mode `600`.
+The installed package reads `/etc/snapbridge/snapbridge.toml` by default. The Debian package installs a copy of `snapbridge.example.toml` there with mode `600`.
 
 Edit it after installation:
 
 ```bash
-sudo nano /etc/proxsnap/proxsnap.toml
-sudo chmod 600 /etc/proxsnap/proxsnap.toml
+sudo nano /etc/snapbridge/snapbridge.toml
+sudo chmod 600 /etc/snapbridge/snapbridge.toml
 ```
 
 Override the config path with `--config <path>` when needed.
@@ -142,7 +142,7 @@ Example:
 [proxmox]
 host = "pve.example.local"
 user = "root@pam"
-token_name = "proxsnap"
+token_name = "snapbridge"
 token_value = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 verify_ssl = false
 timezone = "Europe/Paris"
@@ -184,37 +184,37 @@ max_age = "30d"
 
 ## Scheduling
 
-Schedules live in `/etc/proxsnap/proxsnap.toml` under `[schedule.<name>]`.
+Schedules live in `/etc/snapbridge/snapbridge.toml` under `[schedule.<name>]`.
 
 Run a schedule manually:
 
 ```bash
-proxsnap schedule run daily
+snapbridge schedule run daily
 ```
 
 Run only one phase:
 
 ```bash
-proxsnap schedule create daily
-proxsnap schedule delete daily
+snapbridge schedule create daily
+snapbridge schedule delete daily
 ```
 
 The Debian package installs reusable systemd units:
-- `/lib/systemd/system/proxsnap-schedule@.service`
-- `/lib/systemd/system/proxsnap-schedule@.timer`
+- `/lib/systemd/system/snapbridge-schedule@.service`
+- `/lib/systemd/system/snapbridge-schedule@.timer`
 
 Enable the packaged daily timer for a schedule named `daily`:
 
 ```bash
-sudo systemctl enable --now proxsnap-schedule@daily.timer
-sudo systemctl status proxsnap-schedule@daily.timer
-journalctl -u proxsnap-schedule@daily.service
+sudo systemctl enable --now snapbridge-schedule@daily.timer
+sudo systemctl status snapbridge-schedule@daily.timer
+journalctl -u snapbridge-schedule@daily.service
 ```
 
 The timer runs at `02:00` by default. Override timing with a systemd drop-in for each schedule:
 
 ```bash
-sudo systemctl edit proxsnap-schedule@daily.timer
+sudo systemctl edit snapbridge-schedule@daily.timer
 ```
 
 Example override:
@@ -231,7 +231,7 @@ OnCalendar=*-*-* 03:30:00
 - NAS storage `create --fsfreeze` creates temporary Proxmox VM snapshots before taking the ONTAP snapshot, then removes them.
 - SAN storage `create --fsfreeze` uses the QEMU guest agent directly with `fsfreeze-freeze` / `fsfreeze-thaw`.
 - Snapshot creation logs each major phase: config/backend checks, VM discovery, freeze/snapshot/thaw or temporary snapshot cleanup, and final success/failure.
-- Scheduled deletion only removes snapshots whose names start with `proxmox_snapshot_` and contain a parseable Proxsnap timestamp.
+- Scheduled deletion only removes snapshots whose names start with `proxmox_snapshot_` and contain a parseable Snapbridge timestamp.
 - NAS `mount` creates a FlexClone volume and registers `<storage>-CLONE` in Proxmox.
 - VM disk snapshots still keep the same known limitation as the Python version: Proxmox does not automatically rescan and display them as attached snapshots.
 
@@ -261,16 +261,16 @@ Rough responsibilities:
 Debian package metadata lives in `Cargo.toml` under `[package.metadata.deb]`.
 
 The generated package installs:
-- `/usr/bin/proxsnap`
-- `/etc/proxsnap/proxsnap.toml`
-- `/lib/systemd/system/proxsnap-schedule@.service`
-- `/lib/systemd/system/proxsnap-schedule@.timer`
-- `/usr/share/doc/proxsnap/README.md`
-- `/usr/share/doc/proxsnap/examples/proxsnap.toml`
+- `/usr/bin/snapbridge`
+- `/etc/snapbridge/snapbridge.toml`
+- `/lib/systemd/system/snapbridge-schedule@.service`
+- `/lib/systemd/system/snapbridge-schedule@.timer`
+- `/usr/share/doc/snapbridge/README.md`
+- `/usr/share/doc/snapbridge/examples/snapbridge.toml`
 
 The release workflow is `.github/workflows/debian-release.yml`. It only runs for tags matching `v*`, requires the tag version to match `Cargo.toml`, and builds on Ubuntu 22.04 to keep the generated package compatible with Debian 12 / Proxmox 8 era `libc6` versions.
 
-The root `install.sh` script is designed for `curl | bash` installation from GitHub Releases. Set `PROXSNAP_VERSION` to pin a specific tag; omit it to install the latest release.
+The root `install.sh` script is designed for `curl | bash` installation from GitHub Releases. Set `SNAPBRIDGE_VERSION` to pin a specific tag; omit it to install the latest release.
 
 ## Verification
 

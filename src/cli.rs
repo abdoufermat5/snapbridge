@@ -24,10 +24,10 @@ impl LogLevel {
 }
 
 #[derive(Debug, Parser)]
-#[command(name = "proxsnap")]
+#[command(name = "snapbridge")]
 #[command(about = "Proxmox + ONTAP snapshot workflows for NAS and SAN storage")]
 pub struct Cli {
-    #[arg(long, default_value = "/etc/proxsnap/proxsnap.toml")]
+    #[arg(long, default_value = "/etc/snapbridge/snapbridge.toml")]
     pub config: PathBuf,
 
     #[arg(long, value_enum, default_value = "info")]
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn parses_nas_vm_command() {
         let cli = Cli::try_parse_from([
-            "proxsnap",
+            "snapbridge",
             "nas",
             "vm",
             "create",
@@ -183,19 +183,19 @@ mod tests {
 
     #[test]
     fn defaults_to_system_config_path() {
-        let cli =
-            Cli::try_parse_from(["proxsnap", "nas", "storage", "list"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["snapbridge", "nas", "storage", "list"])
+            .expect("cli should parse");
 
         assert_eq!(
             cli.config,
-            std::path::PathBuf::from("/etc/proxsnap/proxsnap.toml")
+            std::path::PathBuf::from("/etc/snapbridge/snapbridge.toml")
         );
     }
 
     #[test]
     fn parses_san_storage_command() {
         let cli = Cli::try_parse_from([
-            "proxsnap",
+            "snapbridge",
             "san",
             "storage",
             "restore",
@@ -217,8 +217,8 @@ mod tests {
 
     #[test]
     fn parses_nas_storage_list_without_storage_filter() {
-        let cli =
-            Cli::try_parse_from(["proxsnap", "nas", "storage", "list"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["snapbridge", "nas", "storage", "list"])
+            .expect("cli should parse");
 
         match cli.command {
             TopCommand::Nas(NasCommand::Storage(NasStorageCommand::List(args))) => {
@@ -230,8 +230,8 @@ mod tests {
 
     #[test]
     fn parses_san_storage_list_without_storage_filter() {
-        let cli =
-            Cli::try_parse_from(["proxsnap", "san", "storage", "list"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["snapbridge", "san", "storage", "list"])
+            .expect("cli should parse");
 
         match cli.command {
             TopCommand::San(SanCommand::Storage(SanStorageCommand::List(args))) => {
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn parses_global_output_format_after_subcommand() {
         let cli = Cli::try_parse_from([
-            "proxsnap",
+            "snapbridge",
             "nas",
             "storage",
             "list",
@@ -260,28 +260,29 @@ mod tests {
 
     #[test]
     fn parses_schedule_commands() {
-        let cli = Cli::try_parse_from(["proxsnap", "schedule", "run", "daily"])
+        let cli = Cli::try_parse_from(["snapbridge", "schedule", "run", "daily"])
             .expect("cli should parse");
         match cli.command {
             TopCommand::Schedule(ScheduleCommand::Run(args)) => assert_eq!(args.name, "daily"),
             _ => panic!("unexpected command shape"),
         }
 
-        let cli = Cli::try_parse_from(["proxsnap", "schedule", "create", "daily"])
+        let cli = Cli::try_parse_from(["snapbridge", "schedule", "create", "daily"])
             .expect("cli should parse");
         match cli.command {
             TopCommand::Schedule(ScheduleCommand::Create(args)) => assert_eq!(args.name, "daily"),
             _ => panic!("unexpected command shape"),
         }
 
-        let cli = Cli::try_parse_from(["proxsnap", "schedule", "delete", "daily"])
+        let cli = Cli::try_parse_from(["snapbridge", "schedule", "delete", "daily"])
             .expect("cli should parse");
         match cli.command {
             TopCommand::Schedule(ScheduleCommand::Delete(args)) => assert_eq!(args.name, "daily"),
             _ => panic!("unexpected command shape"),
         }
 
-        let cli = Cli::try_parse_from(["proxsnap", "schedule", "list"]).expect("cli should parse");
+        let cli =
+            Cli::try_parse_from(["snapbridge", "schedule", "list"]).expect("cli should parse");
         assert!(matches!(
             cli.command,
             TopCommand::Schedule(ScheduleCommand::List)

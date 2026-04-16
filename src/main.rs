@@ -1,8 +1,8 @@
 use clap::Parser;
 
-use proxsnap::cli::Cli;
-use proxsnap::logger;
-use proxsnap::run;
+use snapbridge::cli::Cli;
+use snapbridge::logger;
+use snapbridge::run;
 
 #[tokio::main]
 async fn main() {

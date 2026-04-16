@@ -53,7 +53,7 @@ where
                 vm.vmid, vm.name
             ));
             let task = proxmox
-                .create_vm_snapshot(&vm.node, vm.vmid, &snapname, "proxsnap fsfreeze")
+                .create_vm_snapshot(&vm.node, vm.vmid, &snapname, "snapbridge fsfreeze")
                 .await?;
             let exitstatus = wait_for_task(proxmox, &vm.node, &task).await?;
             if exitstatus != "OK" {

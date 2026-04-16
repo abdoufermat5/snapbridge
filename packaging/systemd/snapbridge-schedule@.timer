@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily snapbridge schedule %i
+Documentation=file:/usr/share/doc/snapbridge/README.md
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+Unit=snapbridge-schedule@%i.service
+
+[Install]
+WantedBy=timers.target

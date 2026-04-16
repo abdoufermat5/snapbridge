@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="${PROXSNAP_REPO:-abdoufermat5/proxsnap}"
+repo="${SNAPBRIDGE_REPO:-abdoufermat5/snapbridge}"
 github_api="${GITHUB_API_URL:-https://api.github.com}"
 github_url="${GITHUB_SERVER_URL:-https://github.com}"
-requested_version="${PROXSNAP_VERSION:-latest}"
+requested_version="${SNAPBRIDGE_VERSION:-latest}"
 
 log() {
-    printf 'proxsnap-installer: %s\n' "$*"
+    printf 'snapbridge-installer: %s\n' "$*"
 }
 
 die() {
-    printf 'proxsnap-installer: error: %s\n' "$*" >&2
+    printf 'snapbridge-installer: error: %s\n' "$*" >&2
     exit 1
 }
 
@@ -102,7 +102,7 @@ main() {
     deb_arch="$(detect_deb_arch)"
     tag="$(resolve_tag)"
     version="${tag#v}"
-    asset="proxsnap_${version}_${deb_arch}.deb"
+    asset="snapbridge_${version}_${deb_arch}.deb"
     base_url="${github_url}/${repo}/releases/download/${tag}"
     tmp_dir="$(mktemp -d)"
     package_path="${tmp_dir}/${asset}"
@@ -119,14 +119,14 @@ main() {
     log "verifying checksum"
     printf '%s\n' "$checksum_line" | (cd "$tmp_dir" && sha256sum -c -)
 
-    if [ "${PROXSNAP_INSTALL_DRY_RUN:-0}" = "1" ]; then
+    if [ "${SNAPBRIDGE_INSTALL_DRY_RUN:-0}" = "1" ]; then
         log "dry run complete; package downloaded to ${package_path}"
         return
     fi
 
     log "installing package"
     install_package "$package_path"
-    log "installed $(proxsnap --version 2>/dev/null || printf '%s' "$tag")"
+    log "installed $(snapbridge --version 2>/dev/null || printf '%s' "$tag")"
 }
 
 main "$@"

@@ -1,23 +1,23 @@
 [package]
-name = "proxsnap"
+name = "snapbridge"
 version = "0.2.0"
 edition = "2024"
 description = "Proxmox and NetApp ONTAP snapshot workflows for NAS and SAN storage"
 readme = "README.md"
 
 [package.metadata.deb]
-maintainer = "Proxsnap Maintainers <noreply@example.com>"
+maintainer = "Snapbridge Maintainers <noreply@example.com>"
 depends = "$auto"
 section = "admin"
 priority = "optional"
-extended-description = "proxsnap is an operator CLI for creating, listing, restoring, mounting, and deleting Proxmox snapshots on NetApp ONTAP-backed NAS and SAN storage."
+extended-description = "snapbridge is an operator CLI for creating, listing, restoring, mounting, and deleting Proxmox snapshots on NetApp ONTAP-backed NAS and SAN storage."
 assets = [
-    ["target/release/proxsnap", "usr/bin/", "755"],
-    ["proxsnap.example.toml", "etc/proxsnap/proxsnap.toml", "600"],
-    ["packaging/systemd/proxsnap-schedule@.service", "lib/systemd/system/proxsnap-schedule@.service", "644"],
-    ["packaging/systemd/proxsnap-schedule@.timer", "lib/systemd/system/proxsnap-schedule@.timer", "644"],
-    ["README.md", "usr/share/doc/proxsnap/README.md", "644"],
-    ["proxsnap.example.toml", "usr/share/doc/proxsnap/examples/proxsnap.toml", "644"],
+    ["target/release/snapbridge", "usr/bin/", "755"],
+    ["snapbridge.example.toml", "etc/snapbridge/snapbridge.toml", "600"],
+    ["packaging/systemd/snapbridge-schedule@.service", "lib/systemd/system/snapbridge-schedule@.service", "644"],
+    ["packaging/systemd/snapbridge-schedule@.timer", "lib/systemd/system/snapbridge-schedule@.timer", "644"],
+    ["README.md", "usr/share/doc/snapbridge/README.md", "644"],
+    ["snapbridge.example.toml", "usr/share/doc/snapbridge/examples/snapbridge.toml", "644"],
 ]
 
 [dependencies]

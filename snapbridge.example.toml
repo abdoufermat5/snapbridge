@@ -1,7 +1,7 @@
 [proxmox]
 host = "pve.example.local"
 user = "root@pam"
-token_name = "proxsnap"
+token_name = "snapbridge"
 token_value = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 verify_ssl = false
 timezone = "Europe/Paris"
